@@ -44,6 +44,7 @@ enum class ChapterDownloadAction {
     START_NOW,
     CANCEL,
     DELETE,
+    REDOWNLOAD,
 }
 
 @Composable
@@ -201,7 +202,7 @@ private fun DownloadedIndicator(
                 enabled = enabled,
                 hapticFeedback = LocalHapticFeedback.current,
                 onLongClick = { isMenuExpanded = true },
-                onClick = { isMenuExpanded = true },
+                onClick = { /* Do nothing on normal click */ },
             ),
         contentAlignment = Alignment.Center,
     ) {
@@ -216,6 +217,13 @@ private fun DownloadedIndicator(
                 text = { Text(text = stringResource(MR.strings.action_delete)) },
                 onClick = {
                     onClick(ChapterDownloadAction.DELETE)
+                    isMenuExpanded = false
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(text = stringResource(MR.strings.action_download)) },
+                onClick = {
+                    onClick(ChapterDownloadAction.REDOWNLOAD)
                     isMenuExpanded = false
                 },
             )

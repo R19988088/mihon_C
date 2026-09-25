@@ -263,6 +263,11 @@ class UpdatesViewModel(
                 ChapterDownloadAction.DELETE -> {
                     deleteChapters(items)
                 }
+                ChapterDownloadAction.REDOWNLOAD -> {
+                    // Delete first, then download
+                    deleteChapters(items)
+                    downloadChapters(items)
+                }
             }
             toggleAllSelection(false)
         }

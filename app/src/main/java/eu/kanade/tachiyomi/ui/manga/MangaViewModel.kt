@@ -705,6 +705,12 @@ class MangaViewModel(
             ChapterDownloadAction.DELETE -> {
                 deleteChapters(items.map { it.chapter })
             }
+            ChapterDownloadAction.REDOWNLOAD -> {
+                // Delete first, then download
+                val chapters = items.map { it.chapter }
+                deleteChapters(chapters)
+                startDownload(chapters, false)
+            }
         }
     }
 
