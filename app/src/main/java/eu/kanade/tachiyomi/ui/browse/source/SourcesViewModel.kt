@@ -11,6 +11,7 @@ import dev.zacsweers.metrox.viewmodel.ViewModelKey
 import eu.kanade.domain.source.interactor.GetEnabledSources
 import eu.kanade.domain.source.interactor.ToggleSource
 import eu.kanade.domain.source.interactor.ToggleSourcePin
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.presentation.browse.SourceUiModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -39,6 +40,7 @@ class SourcesViewModel(
     private val getEnabledSources: GetEnabledSources,
     private val toggleSource: ToggleSource,
     private val toggleSourcePin: ToggleSourcePin,
+    private val sourcePreferences: SourcePreferences,
 ) : ViewModel() {
 
     private val _events = Channel<Event>(Int.MAX_VALUE)
@@ -52,6 +54,23 @@ class SourcesViewModel(
             _events.send(Event.FailedFetchingSources)
         }
         .map(::toSourceUiModels)
+
+    val selectorSources: StateFlow<List<Source>> = combine(
+        getEnabledSources.subscribe(),
+        sourcePreferences.browseSourceOrder.changes(),
+    ) { sources, savedOrder ->
+        val uniqueSources = sources.distinctBy { it.id }
+        val byId = uniqueSources.associateBy { it.id }
+        val orderedIds = savedOrder.filter { it in byId } + uniqueSources
+            .map { it.id }
+            .filterNot { it in savedOrder }
+        orderedIds.mapNotNull { byId[it] }
+    }
+        .catch {
+            logcat(LogPriority.ERROR, it)
+            emit(emptyList())
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5.seconds), emptyList())
 
     val state: StateFlow<State> = combine(
         enabledSources,
@@ -91,6 +110,10 @@ class SourcesViewModel(
                 }.toTypedArray(),
             )
         }
+    }
+
+    fun reorderSources(orderedIds: List<Long>) {
+        sourcePreferences.browseSourceOrder.set(orderedIds.distinct())
     }
 
     fun toggleSource(source: Source) {

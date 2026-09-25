@@ -43,6 +43,11 @@ class SourcePreferences(
         -1,
     )
 
+    val browseSourceOrder: Preference<List<Long>> = preferenceStore.getLongArray(
+        Preference.appStateKey("browse_source_order"),
+        emptyList(),
+    )
+
     val enabledContentWarnings: Preference<Set<ContentWarning>> = preferenceStore.getEnumSet(
         "enabled_content_warnings",
         setOf(ContentWarning.SAFE, ContentWarning.MIXED, ContentWarning.NSFW),

@@ -5,6 +5,8 @@ import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,11 +14,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -24,6 +29,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,14 +37,18 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import androidx.paging.compose.collectAsLazyPagingItems
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.Navigator
@@ -49,7 +59,6 @@ import dev.zacsweers.metrox.viewmodel.assistedMetroViewModel
 import dev.zacsweers.metrox.viewmodel.metroViewModel
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.presentation.browse.BrowseSourceContent
-import eu.kanade.presentation.browse.SourceUiModel
 import eu.kanade.presentation.browse.components.SourceIcon
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
@@ -102,10 +111,26 @@ data object BrowseTab : Tab {
         
         val sourcesViewModel = metroViewModel<SourcesViewModel>()
         val sourcesState by sourcesViewModel.state.collectAsStateWithLifecycle()
-        
+        val selectorSources by sourcesViewModel.selectorSources.collectAsStateWithLifecycle()
+        val reorderableSources = remember { selectorSources.toMutableStateList() }
+        val lazyListState = rememberLazyListState()
+        val reorderableState = rememberReorderableLazyListState(lazyListState, PaddingValues()) { from, to ->
+            val item = reorderableSources.removeAt(from.index)
+            reorderableSources.add(to.index, item)
+            sourcesViewModel.reorderSources(reorderableSources.map { it.id })
+        }
         var selectedSourceId by remember { mutableStateOf<Long?>(null) }
-        
         val snackbarHostState = remember { SnackbarHostState() }
+
+        LaunchedEffect(selectorSources) {
+            if (!reorderableState.isAnyItemDragging) {
+                reorderableSources.clear()
+                reorderableSources.addAll(selectorSources)
+            }
+            if (selectedSourceId !in selectorSources.map { it.id }) {
+                selectedSourceId = selectorSources.firstOrNull()?.id
+            }
+        }
 
         Scaffold(
             topBar = {
@@ -122,48 +147,38 @@ data object BrowseTab : Tab {
                                     ),
                                     AppBar.OverflowAction(
                                         title = stringResource(MR.strings.label_extensions),
-                                        onClick = { 
-                                            // TODO: Navigate to extensions
-                                        },
+                                        onClick = { },
                                     ),
                                     AppBar.OverflowAction(
                                         title = stringResource(MR.strings.label_migration),
-                                        onClick = { 
-                                            // TODO: Navigate to migration
-                                        },
+                                        onClick = { },
                                     ),
                                 ),
                             )
                         },
                     )
-                    
-                    // Horizontal source selector
-                    if (!sourcesState.isLoading && sourcesState.items.isNotEmpty()) {
-                        val sources = sourcesState.items
-                            .filterIsInstance<SourceUiModel.Item>()
-                            .map { it.source }
-                        
-                        if (sources.isNotEmpty() && selectedSourceId == null) {
-                            selectedSourceId = sources.firstOrNull()?.id
-                        }
-                        
+
+                    if (!sourcesState.isLoading && reorderableSources.isNotEmpty()) {
                         LazyRow(
                             modifier = Modifier
                                 .background(MaterialTheme.colorScheme.surface)
-                                .padding(vertical = 12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                .padding(vertical = 8.dp),
+                            state = lazyListState,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
                             contentPadding = PaddingValues(horizontal = 16.dp),
                         ) {
-                            items(sources) { source ->
-                                SourceLogoItem(
-                                    source = source,
-                                    isSelected = source.id == selectedSourceId,
-                                    onClick = { 
-                                        android.util.Log.d("BrowseTab", "Clicked source: ${source.name} (${source.id}), current selected: $selectedSourceId")
-                                        selectedSourceId = source.id
-                                        android.util.Log.d("BrowseTab", "Updated selectedSourceId to: $selectedSourceId")
-                                    },
-                                )
+                            items(
+                                items = reorderableSources,
+                                key = { it.id },
+                            ) { source ->
+                                ReorderableItem(reorderableState, key = source.id) {
+                                    SourceLogoItem(
+                                        source = source,
+                                        isSelected = source.id == selectedSourceId,
+                                        dragModifier = Modifier.longPressDraggableHandle(),
+                                        onClick = { selectedSourceId = source.id },
+                                    )
+                                }
                             }
                         }
                     }
@@ -173,27 +188,17 @@ data object BrowseTab : Tab {
         ) { paddingValues ->
             if (sourcesState.isLoading) {
                 LoadingScreen()
-            } else {
-                val sources = sourcesState.items
-                    .filterIsInstance<SourceUiModel.Item>()
-                    .map { it.source }
-                
-                android.util.Log.d("BrowseTab", "Content recomposition - sources count: ${sources.size}, selectedSourceId: $selectedSourceId")
-                
-                if (sources.isNotEmpty() && selectedSourceId != null) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(paddingValues)
-                    ) {
-                        android.util.Log.d("BrowseTab", "Rendering content for sourceId: $selectedSourceId")
-                        // Use key() to force recomposition when sourceId changes
-                        key(selectedSourceId) {
-                            BrowseSourceContentWithMap(
-                                sourceId = selectedSourceId!!,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
+            } else if (selectedSourceId != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                ) {
+                    key(selectedSourceId) {
+                        BrowseSourceContentWithMap(
+                            sourceId = selectedSourceId!!,
+                            modifier = Modifier.fillMaxSize(),
+                        )
                     }
                 }
             }
@@ -209,23 +214,42 @@ data object BrowseTab : Tab {
 private fun SourceLogoItem(
     source: Source,
     isSelected: Boolean,
+    dragModifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    Box(
-        modifier = Modifier
-            .size(56.dp)
+    val isDarkTheme = isSystemInDarkTheme()
+
+    Row(
+        modifier = dragModifier
+            .height(50.dp)
             .background(
                 color = if (isSelected) {
                     MaterialTheme.colorScheme.primaryContainer
                 } else {
                     MaterialTheme.colorScheme.surfaceVariant
                 },
-                shape = CircleShape,
+                shape = RoundedCornerShape(28.dp),
             )
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
+            .clickable(onClick = onClick)
+            .padding(horizontal = if (isSelected) 12.dp else 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        SourceIcon(source = source)
+        SourceIcon(
+            source = source,
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape),
+        )
+        if (isSelected) {
+            Text(
+                text = source.name,
+                maxLines = 1,
+                modifier = Modifier.widthIn(max = 160.dp),
+                color = if (isDarkTheme) Color.Black else Color.White,
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
     }
 }
 
