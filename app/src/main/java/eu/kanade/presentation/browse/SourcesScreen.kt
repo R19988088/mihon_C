@@ -1,8 +1,14 @@
 package eu.kanade.presentation.browse
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
@@ -14,10 +20,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.browse.components.BaseSourceItem
+import eu.kanade.presentation.browse.components.SourceIcon
 import eu.kanade.tachiyomi.ui.browse.source.SourcesViewModel
 import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceViewModel.Listing
 import eu.kanade.tachiyomi.util.system.LocaleHelper
@@ -114,28 +126,75 @@ private fun SourceItem(
     onClickPin: (Source) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    BaseSourceItem(
-        modifier = modifier,
-        source = source,
-        onClickItem = { onClickItem(source, Listing.Popular) },
-        onLongClickItem = { onLongClickItem(source) },
-        action = {
-            if (source.supportsLatest) {
-                TextButton(onClick = { onClickItem(source, Listing.Latest) }) {
+    var isExpanded by remember { mutableStateOf(false) }
+    
+    Column(modifier = modifier) {
+        // Logo only row (clickable to expand)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { isExpanded = !isExpanded }
+                .padding(horizontal = MaterialTheme.padding.medium, vertical = MaterialTheme.padding.small),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SourceIcon(source = source)
+        }
+        
+        // Expandable section with pink background
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = expandVertically(),
+            exit = shrinkVertically(),
+        ) {
+            Column {
+                // Pink background with source name on the right
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(androidx.compose.ui.graphics.Color(0xFFFFC0CB))
+                        .padding(vertical = 12.dp, horizontal = 16.dp),
+                ) {
                     Text(
-                        text = stringResource(MR.strings.latest),
-                        style = LocalTextStyle.current.copy(
-                            color = MaterialTheme.colorScheme.primary,
-                        ),
+                        text = source.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = androidx.compose.ui.graphics.Color.Black,
+                        modifier = Modifier.align(Alignment.CenterEnd),
+                    )
+                }
+                
+                // Action buttons row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = MaterialTheme.padding.medium, vertical = MaterialTheme.padding.small),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = { onClickItem(source, Listing.Popular) }) {
+                        Text(
+                            text = stringResource(MR.strings.popular),
+                            style = LocalTextStyle.current.copy(
+                                color = MaterialTheme.colorScheme.primary,
+                            ),
+                        )
+                    }
+                    if (source.supportsLatest) {
+                        TextButton(onClick = { onClickItem(source, Listing.Latest) }) {
+                            Text(
+                                text = stringResource(MR.strings.latest),
+                                style = LocalTextStyle.current.copy(
+                                    color = MaterialTheme.colorScheme.primary,
+                                ),
+                            )
+                        }
+                    }
+                    SourcePinButton(
+                        isPinned = Pin.Pinned in source.pin,
+                        onClick = { onClickPin(source) },
                     )
                 }
             }
-            SourcePinButton(
-                isPinned = Pin.Pinned in source.pin,
-                onClick = { onClickPin(source) },
-            )
-        },
-    )
+        }
+    }
 }
 
 @Composable
