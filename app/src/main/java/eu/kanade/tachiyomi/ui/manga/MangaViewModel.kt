@@ -543,6 +543,7 @@ class MangaViewModel(
 
     private fun List<Chapter>.toChapterListItems(manga: Manga): List<ChapterList.Item> {
         val isLocal = manga.isLocal()
+        val source = successState?.source
         return map { chapter ->
             val activeDownload = if (isLocal) {
                 null
@@ -552,13 +553,38 @@ class MangaViewModel(
             val downloaded = if (isLocal) {
                 true
             } else {
-                downloadManager.isChapterDownloaded(
+                // First check cache
+                val cachedDownloaded = downloadManager.isChapterDownloaded(
                     chapter.name,
                     chapter.scanlator,
                     chapter.url,
                     manga.title,
                     manga.source,
                 )
+                
+                // If not in cache, check disk (especially for stub sources)
+                if (!cachedDownloaded && source != null) {
+                    val onDisk = downloadManager.isChapterDownloadedOnDisk(
+                        chapter.name,
+                        chapter.scanlator,
+                        chapter.url,
+                        manga.title,
+                        source,
+                    )
+                    // If found on disk, mark it in cache asynchronously
+                    if (onDisk) {
+                        viewModelScope.launchIO {
+                            try {
+                                downloadManager.verifyAndMarkChapterIfComplete(chapter, manga, source)
+                            } catch (e: Exception) {
+                                logcat(LogPriority.WARN, e) { "Failed to mark chapter ${chapter.name}" }
+                            }
+                        }
+                    }
+                    onDisk
+                } else {
+                    cachedDownloaded
+                }
             }
             val downloadState = when {
                 activeDownload != null -> activeDownload.status
