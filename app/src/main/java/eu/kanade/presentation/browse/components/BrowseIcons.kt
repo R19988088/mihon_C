@@ -5,6 +5,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
@@ -14,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.ColorPainter
@@ -43,7 +45,11 @@ private val defaultModifier = Modifier
 fun SourceIcon(
     source: Source,
     modifier: Modifier = Modifier,
+    circular: Boolean = false,
 ) {
+    val iconModifier = modifier
+        .then(defaultModifier)
+        .let { if (circular) it.clip(CircleShape) else it }
     val icon = produceState<ImageBitmap?>(initialValue = null, source.id) { value = source.icon() }.value
 
     when {
@@ -52,28 +58,29 @@ fun SourceIcon(
                 imageVector = MaterialSymbols.Rounded.Warning,
                 contentDescription = null,
                 colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.error),
-                modifier = modifier.then(defaultModifier),
+                modifier = iconModifier,
             )
         }
         icon != null -> {
             Image(
                 bitmap = icon,
                 contentDescription = null,
-                modifier = modifier.then(defaultModifier),
+                modifier = iconModifier,
+                contentScale = ContentScale.Crop,
             )
         }
         source.isLocal() -> {
             Image(
                 painter = painterResource(R.mipmap.ic_local_source),
                 contentDescription = null,
-                modifier = modifier.then(defaultModifier),
+                modifier = iconModifier,
             )
         }
         else -> {
             Image(
                 painter = painterResource(R.mipmap.ic_default_source),
                 contentDescription = null,
-                modifier = modifier.then(defaultModifier),
+                modifier = iconModifier,
             )
         }
     }
@@ -116,7 +123,7 @@ fun ExtensionIcon(
             imageVector = MaterialSymbols.Rounded.Dangerous,
             contentDescription = null,
             colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.error),
-            modifier = modifier.then(defaultModifier),
+            modifier = modifier,
         )
     }
 }

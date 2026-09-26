@@ -48,6 +48,16 @@ class SourcePreferences(
         emptyList(),
     )
 
+    val browseSelectedSource: Preference<Long> = preferenceStore.getLong(
+        Preference.appStateKey("browse_selected_source"),
+        -1L,
+    )
+
+    val browseTagHistory: Preference<Set<String>> = preferenceStore.getStringSet(
+        Preference.appStateKey("browse_tag_history"),
+        emptySet(),
+    )
+
     val enabledContentWarnings: Preference<Set<ContentWarning>> = preferenceStore.getEnumSet(
         "enabled_content_warnings",
         setOf(ContentWarning.SAFE, ContentWarning.MIXED, ContentWarning.NSFW),

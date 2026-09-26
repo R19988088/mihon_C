@@ -32,6 +32,7 @@ import eu.kanade.tachiyomi.util.removeCovers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filter
@@ -56,6 +57,7 @@ import tachiyomi.domain.manga.model.toMangaUpdate
 import tachiyomi.domain.source.interactor.GetRemoteManga
 import tachiyomi.domain.source.service.SourceManager
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.seconds
 import eu.kanade.tachiyomi.source.model.Filter as SourceModelFilter
 
 @AssistedInject
@@ -63,7 +65,7 @@ class BrowseSourceViewModel(
     @Assisted private val sourceId: Long,
     @Assisted listingQuery: String?,
     private val sourceManager: SourceManager,
-    sourcePreferences: SourcePreferences,
+    private val sourcePreferences: SourcePreferences,
     private val libraryPreferences: LibraryPreferences,
     private val coverCache: CoverCache,
     private val getRemoteManga: GetRemoteManga,
@@ -79,6 +81,9 @@ class BrowseSourceViewModel(
 
     val state: StateFlow<BrowseSourceViewModel.State>
         field = MutableStateFlow<BrowseSourceViewModel.State>(State(Listing.valueOf(listingQuery)))
+
+    private val _activeBrowseTags = MutableStateFlow<Set<String>>(emptySet())
+    val activeBrowseTags: StateFlow<Set<String>> = _activeBrowseTags.asStateFlow()
 
     @AssistedFactory
     @ManualViewModelAssistedFactoryKey
@@ -157,7 +162,22 @@ class BrowseSourceViewModel(
     }
 
     fun setListing(listing: Listing) {
+        _activeBrowseTags.value = emptySet()
         state.update { it.copy(listing = listing, toolbarQuery = null) }
+    }
+
+    fun applyBrowseTags(tags: Set<String>) {
+        val normalized = tags.map(String::trim).filter(String::isNotEmpty).toSet()
+        _activeBrowseTags.value = normalized
+        val query = normalized.takeIf { it.isNotEmpty() }?.joinToString(" ") { tag ->
+            "tag:\"${tag.replace("\"", "\\\"")}\""
+        }
+        state.update {
+            it.copy(
+                listing = Listing.Search(query = query, filters = FilterList()),
+                toolbarQuery = query,
+            )
+        }
     }
 
     fun setFilters(filters: FilterList) {
@@ -166,6 +186,25 @@ class BrowseSourceViewModel(
                 filters = filters,
             )
         }
+    }
+
+    val browseTagHistory: StateFlow<Set<String>> = sourcePreferences.browseTagHistory.changes()
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5.seconds.inWholeMilliseconds),
+            sourcePreferences.browseTagHistory.get(),
+        )
+
+    fun addBrowseTagHistory(tag: String) {
+        val value = tag.trim()
+        if (value.isEmpty()) return
+        sourcePreferences.browseTagHistory.set(
+            (sourcePreferences.browseTagHistory.get() + value).toList().takeLast(50).toSet(),
+        )
+    }
+
+    fun removeBrowseTagHistory(tag: String) {
+        sourcePreferences.browseTagHistory.set(sourcePreferences.browseTagHistory.get() - tag)
     }
 
     fun search(query: String? = null, filters: FilterList? = null) {
